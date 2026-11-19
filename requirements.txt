@@ -1,0 +1,19 @@
+# Agents
+langchain-core>=1.0
+langchain-google-genai>=4.0
+langgraph>=1.0
+
+# Sources and audio
+youtube-transcript-api>=1.0.0
+yt-dlp
+faster-whisper>=1.0
+
+# App and export
+streamlit>=1.40
+python-dotenv
+reportlab
+
+# Tests
+pytest
+
+# Also needed (not a pip package): ffmpeg, e.g. `sudo apt install ffmpeg`

@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(timeout 300 python3 -m pytest -q)"
+    ]
+  }
+}
