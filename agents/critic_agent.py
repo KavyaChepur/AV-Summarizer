@@ -2,8 +2,9 @@
 
 Two kinds of checks:
   1. LLM review - unsupported claims, missing major topics, wrong format.
-  2. Code check - timeline timestamps must exist in the source, be in order and
-     not exceed the recording's length.
+  2. Code checks - timeline timestamps must exist in the source, be in order and
+     not exceed the recording's length; the mind map must be a well-formed outline
+     (one central topic, 2-9 branches, at most 4 levels, short labels).
 
 Failed outputs are sent back to the agent that wrote them (`revise` node), at
 most MAX_REVISIONS times.
@@ -20,13 +21,14 @@ from agents.common import emit, options
 from agents.registry import ANALYSIS_AGENTS
 from errors import LLMError
 from llm import client
+from tools.mindmap_tools import validate_outline
 from tools.text_tools import find_timestamps, fmt_time
 
 NAME = "critic"
 
 
 class OutputReview(BaseModel):
-    output: Literal["summary", "takeaways", "timeline"]
+    output: Literal["short_summary", "long_summary", "mind_map", "takeaways", "timeline"]
     passed: bool = Field(description="true if there are no significant problems")
     issues: List[str] = Field(default_factory=list,
                               description="Specific, actionable problems; empty if passed")
@@ -43,8 +45,8 @@ CRITIC_PROMPT = ChatPromptTemplate.from_messages([
      "recording). Report only significant problems:\n"
      "- claims, names or numbers that are not supported by the SOURCE\n"
      "- timestamps that do not appear in the SOURCE\n"
-     "- major topics of the recording that are missing (the summary must cover the whole "
-     "recording)\n"
+     "- major topics of the recording that are missing (summaries and the mind map must "
+     "cover the whole recording)\n"
      "- the output ignores its TASK (wrong format or far off the requested length)\n"
      "Ignore minor wording and style. Each issue must say exactly what is wrong and how "
      "to fix it. Review every output listed."),
@@ -92,6 +94,8 @@ def critic(state) -> dict:
     if "timeline" in code_issues:
         code_issues["timeline"] = validate_timestamps(
             state["timeline"], state["source_text"], state.get("duration", 0))
+    if "mind_map" in code_issues:
+        code_issues["mind_map"] = validate_outline(state["mind_map"])
 
     log = []
     llm_reviews = {}

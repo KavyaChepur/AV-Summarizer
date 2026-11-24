@@ -48,16 +48,24 @@ CAPTION_LANGUAGES = ("en", "en-US", "en-GB", "hi")
 # --- Cache -----------------------------------------------------------------
 CACHE_DIR = Path(os.getenv("AVS_CACHE_DIR", PROJECT_DIR / ".cache"))
 
+# --- Chat agent --------------------------------------------------------------
+# Transcripts up to this size are given to the chat agent in full (one call per
+# question); longer ones are searched locally and only the best passages are sent.
+CHAT_FULL_CONTEXT_MAX_CHARS = _int("CHAT_FULL_CONTEXT_MAX_CHARS", 300000)
+CHAT_SEARCH_PASSAGES = _int("CHAT_SEARCH_PASSAGES", 8)
+CHAT_HISTORY_TURNS = _int("CHAT_HISTORY_TURNS", 6)   # earlier Q&A pairs sent as memory
+
+# --- Mind map ----------------------------------------------------------------
+MARKMAP_AUTOLOADER_URL = "https://cdn.jsdelivr.net/npm/markmap-autoloader@0.18.12"
+
 # --- Options shown in the UI ------------------------------------------------
-LENGTHS = {
-    "Short": "Write a concise summary of about 100 words.",
-    "Medium": "Write a clear summary of about 250 words, as bullet points.",
-    "Detailed": "Write detailed, well-organised notes (about 600-800 words) with "
-                "markdown headings per topic and bullet points under each.",
-}
+# Display order of the outputs. Each key is produced by the agent of the same name.
 OUTPUT_TITLES = {
-    "summary": "Summary",
+    "short_summary": "Short summary",
+    "long_summary": "Long summary",
+    "mind_map": "Mind map",
     "takeaways": "Key takeaways",
     "timeline": "Timestamped notes",
 }
+DEFAULT_OUTPUTS = ["short_summary", "long_summary", "mind_map", "takeaways"]
 LANGUAGES = ["English", "Hindi", "Telugu", "Spanish", "French", "German"]

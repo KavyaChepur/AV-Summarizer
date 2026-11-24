@@ -9,8 +9,9 @@ NAME = "translator"
 TRANSLATE_PROMPT = ChatPromptTemplate.from_messages([
     ("system",
      "You are the Translator Agent. Translate Markdown study notes into {language}. "
-     "Keep the Markdown structure, numbering and every [MM:SS] timestamp exactly as "
-     "they are. Keep technical terms, names and product names in their usual form. "
+     "Keep the Markdown structure, list indentation, numbering and every [MM:SS] "
+     "timestamp exactly as they are; translate line by line so nested lists keep the "
+     "same shape. Keep technical terms, names and product names in their usual form. "
      "Return only the translation."),
     ("human", "{text}"),
 ])

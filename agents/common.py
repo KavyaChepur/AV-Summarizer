@@ -18,8 +18,7 @@ def emit(agent: str, message: str, progress: Optional[float] = None) -> None:
 def options(state) -> dict:
     """Options with defaults filled in."""
     defaults = {
-        "length": "Medium",
-        "outputs": ["summary", "takeaways", "timeline"],
+        "outputs": list(config.DEFAULT_OUTPUTS),
         "language": "English",
         "stt_engine": config.STT_ENGINE,
         "whisper_model": config.WHISPER_MODEL,

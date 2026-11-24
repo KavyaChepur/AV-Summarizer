@@ -6,8 +6,7 @@ from tools.text_tools import Chunk
 
 
 class Options(TypedDict, total=False):
-    length: str                 # "Short" | "Medium" | "Detailed"
-    outputs: List[str]          # any of "summary", "takeaways", "timeline", in display order
+    outputs: List[str]          # keys of config.OUTPUT_TITLES, e.g. "short_summary", "mind_map"
     language: str               # output language, e.g. "English"
     stt_engine: str             # "whisper" | "gemini"
     whisper_model: str          # "tiny" | "base" | "small" | "medium"
@@ -50,8 +49,10 @@ class PipelineState(TypedDict, total=False):
     source_text: str            # what the analysis agents read
     source_kind: str            # "transcript" | "condensed notes"
 
-    # ---- analysis (English drafts)
-    summary: str
+    # ---- analysis (English drafts), one key per writer agent
+    short_summary: str
+    long_summary: str
+    mind_map: str               # nested Markdown outline
     takeaways: str
     timeline: str
 
@@ -61,6 +62,9 @@ class PipelineState(TypedDict, total=False):
 
     # ---- output
     final_outputs: Dict[str, str]
+    doc_title: str
+    source_line: str
+    transcript_note: str
     markdown: str
 
     # ---- trace: every agent appends what it did (parallel-safe)

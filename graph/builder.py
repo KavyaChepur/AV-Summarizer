@@ -14,7 +14,7 @@ from agents.translator_agent import translate
 from graph import router
 from graph.state import PipelineState
 
-ANALYSIS_NODES = list(ANALYSIS_AGENTS)  # ["summary", "takeaways", "timeline"]
+ANALYSIS_NODES = list(ANALYSIS_AGENTS)  # short_summary, long_summary, mind_map, …
 
 # Labels used by the UI / CLI for each node.
 NODE_LABELS = {
@@ -24,13 +24,16 @@ NODE_LABELS = {
     "speech_to_text": "Transcription agent · speech-to-text",
     "preprocess": "Preprocessing",
     "chunk_notes": "Chunk-notes agent",
-    "summary": "Summary agent",
+    "short_summary": "Short summary agent",
+    "long_summary": "Long summary agent",
+    "mind_map": "Mind map agent",
     "takeaways": "Takeaways agent",
     "timeline": "Timeline agent",
     "critic": "Critic agent",
     "revise": "Revision (back to writers)",
     "translate": "Translator agent",
     "export": "Export",
+    "chat": "Chat agent",
     "llm": "Gemini",
 }
 

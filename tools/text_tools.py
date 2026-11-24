@@ -47,6 +47,23 @@ def find_timestamps(text: str) -> List[float]:
     return out
 
 
+_LINKABLE_TS_RE = re.compile(r"\[(\d{1,2}(?::\d{2}){1,2})\](?!\()")
+
+
+def link_timestamps(text: str, video_id: str = None) -> str:
+    """Turn [MM:SS] into Markdown links that open the YouTube video at that moment."""
+    if not video_id or not text:
+        return text
+
+    def rep(m):
+        try:
+            seconds = int(parse_time(m.group(1)))
+        except ValueError:
+            return m.group(0)
+        return f"[{m.group(1)}](https://www.youtube.com/watch?v={video_id}&t={seconds}s)"
+    return _LINKABLE_TS_RE.sub(rep, text)
+
+
 def transcript_duration(segments: List[Dict]) -> float:
     if not segments:
         return 0.0

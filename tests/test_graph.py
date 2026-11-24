@@ -4,9 +4,13 @@ import pytest
 import config
 from agents import transcription_agent
 from agents.critic_agent import Critique, OutputReview
+from agents.registry import ANALYSIS_AGENTS
 from errors import TranscriptError
 from graph.builder import get_graph
 from llm import client
+
+GOOD_MIND_MAP = ("- Topics overview\n  - Topic zero\n    - Sentences 0-4\n"
+                 "  - Topic one\n    - Sentences 5-9\n  - Topic two\n    - Sentences 10-14")
 
 
 def _segments(n=20):
@@ -15,10 +19,15 @@ def _segments(n=20):
 
 
 class FakeLLM:
-    """Answers like each agent would; the critic fails the summary `fail_times` times."""
+    """Answers like each agent would.
 
-    def __init__(self, fail_times=0):
+    fail_times: the critic fails the short summary this many times.
+    bad_mind_map: the first mind map draft is prose instead of an outline.
+    """
+
+    def __init__(self, fail_times=0, bad_mind_map=False):
         self.fail_times = fail_times
+        self.bad_mind_map = bad_mind_map
         self.calls = []
 
     def _answer(self, prompt) -> str:
@@ -29,12 +38,17 @@ class FakeLLM:
         if "Chunk-Notes Agent" in text:
             self.calls.append("chunk_notes")
             return "- [00:00] notes"
-        for role in ("Summary Agent", "Takeaways Agent", "Timeline Agent"):
-            if f"You are the {role}" in text:
-                self.calls.append(role + (" (revise)" if "PREVIOUS DRAFT" in text else ""))
-                if role == "Timeline Agent":
+        for agent in ANALYSIS_AGENTS.values():
+            if f"You are the {agent.role} " in text:
+                revising = "PREVIOUS DRAFT" in text
+                self.calls.append(agent.role + (" (revise)" if revising else ""))
+                if agent.key == "timeline":
                     return "- **[00:00]** Intro: start\n- **[01:00]** Topic: middle"
-                return f"{role} output"
+                if agent.key == "mind_map":
+                    if self.bad_mind_map and not revising:
+                        return "The video talks about three topics in order."
+                    return GOOD_MIND_MAP
+                return f"{agent.role} output"
         raise AssertionError(f"unexpected prompt: {text[:200]}")
 
     def ask(self, prompt, **_):
@@ -48,9 +62,9 @@ class FakeLLM:
         self.calls.append("critic")
         text = str(prompt)
         reviews = []
-        for k in ("summary", "takeaways", "timeline"):
+        for k in ANALYSIS_AGENTS:
             if f"OUTPUT: {k}" in text:
-                fail = k == "summary" and self.fail_times > 0
+                fail = k == "short_summary" and self.fail_times > 0
                 reviews.append(OutputReview(output=k, passed=not fail,
                                             issues=["misses the ending"] if fail else []))
         self.fail_times -= 1
@@ -74,19 +88,38 @@ def _run(**state):
     return get_graph().invoke(state)
 
 
-def test_youtube_captions_with_one_revision(fake_llm, monkeypatch):
+def test_default_outputs_with_one_revision(fake_llm, monkeypatch):
     fake = fake_llm(fail_times=1)
     monkeypatch.setattr(transcription_agent, "fetch_transcript", lambda *a: _segments())
     out = _run(source_type="youtube", url="https://youtu.be/dQw4w9WgXcQ")
 
     assert out["transcript_source"] == "captions"
-    assert list(out["final_outputs"]) == ["summary", "takeaways", "timeline"]
+    assert list(out["final_outputs"]) == ["short_summary", "long_summary", "mind_map",
+                                          "takeaways"]
     assert out["revision_count"] == 1
     assert all(r["passed"] for r in out["reviews"].values())
-    assert "Summary Agent (revise)" in fake.calls
+    assert "Short Summary Agent (revise)" in fake.calls
+    assert "Long Summary Agent (revise)" not in fake.calls
     assert fake.calls.count("critic") == 2
-    assert "https://www.youtube.com/watch?v=dQw4w9WgXcQ" in out["markdown"]
+    assert "Timeline Agent" not in fake.calls   # not selected by default
+    md = out["markdown"]
+    assert "https://www.youtube.com/watch?v=dQw4w9WgXcQ" in md
+    for title in ("## Short summary", "## Long summary", "## Mind map", "## Key takeaways"):
+        assert title in md
+    assert "```mermaid\nmindmap\n  root((Topics overview))" in md
     assert "translator" not in fake.calls
+
+
+def test_malformed_mind_map_is_sent_back(fake_llm, monkeypatch):
+    """The LLM critic passes everything, but the code check catches the mind map."""
+    fake = fake_llm(bad_mind_map=True)
+    monkeypatch.setattr(transcription_agent, "fetch_transcript", lambda *a: _segments())
+    out = _run(source_type="youtube", url="dQw4w9WgXcQ",
+               options={"outputs": ["mind_map", "takeaways"]})
+    assert "Mind Map Agent (revise)" in fake.calls
+    assert out["final_outputs"]["mind_map"] == GOOD_MIND_MAP
+    assert out["reviews"]["mind_map"]["passed"]
+    assert out["revision_count"] == 1
 
 
 def test_revisions_stop_at_max(fake_llm, monkeypatch):
@@ -94,7 +127,7 @@ def test_revisions_stop_at_max(fake_llm, monkeypatch):
     monkeypatch.setattr(transcription_agent, "fetch_transcript", lambda *a: _segments())
     out = _run(source_type="youtube", url="dQw4w9WgXcQ")
     assert out["revision_count"] == config.MAX_REVISIONS
-    assert not out["reviews"]["summary"]["passed"]
+    assert not out["reviews"]["short_summary"]["passed"]
     assert out["markdown"]  # still produces notes
 
 
@@ -116,17 +149,18 @@ def test_missing_captions_fall_back_to_speech_to_text(fake_llm, monkeypatch, tmp
         return _segments(), {"language": "en", "engine": kw["engine"]}
 
     monkeypatch.setattr(transcription_agent, "transcribe", fake_transcribe)
-    out = _run(source_type="youtube", url="dQw4w9WgXcQ", options={"outputs": ["summary"]})
+    opts = {"outputs": ["short_summary"]}
+    out = _run(source_type="youtube", url="dQw4w9WgXcQ", options=opts)
 
     assert out["transcript_source"] == "whisper"
     assert out["caption_problem"] == "Captions are disabled for this video."
     assert out["title"] == "My video"
-    assert list(out["final_outputs"]) == ["summary"]
+    assert list(out["final_outputs"]) == ["short_summary"]
 
     # second run reuses the cached transcript: no download, no transcription
     monkeypatch.setattr(transcription_agent, "download_youtube_audio",
                         lambda *a: pytest.fail("should use the cache"))
-    out2 = _run(source_type="youtube", url="dQw4w9WgXcQ", options={"outputs": ["summary"]})
+    out2 = _run(source_type="youtube", url="dQw4w9WgXcQ", options=opts)
     assert out2["segments"] == out["segments"]
     assert calls == ["whisper"]
 
@@ -167,12 +201,12 @@ def test_upload_long_recording_uses_map_reduce_and_translation(fake_llm, monkeyp
 
     out = _run(source_type="upload", file_path=str(f), file_name="lecture.mp3",
                options={"language": "Hindi", "stt_engine": "gemini",
-                        "outputs": ["timeline", "summary"], "use_critic": False})
+                        "outputs": ["timeline", "long_summary"], "use_critic": False})
 
     assert out["needs_map_reduce"] and out["source_kind"] == "condensed notes"
     assert "chunk_notes" in fake.calls
     assert out["transcript_source"] == "gemini"
-    assert out["final_outputs"] == {"timeline": "TRANSLATED", "summary": "TRANSLATED"}
+    assert out["final_outputs"] == {"timeline": "TRANSLATED", "long_summary": "TRANSLATED"}
     assert "critic" not in fake.calls
     assert "Notes: lecture" in out["markdown"]
     assert f.exists()  # the user's file is never deleted

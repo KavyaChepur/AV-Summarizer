@@ -27,6 +27,8 @@ def export(state) -> dict:
     if state.get("caption_problem"):
         note += f" (captions were not available: {state['caption_problem']})"
 
-    return {"final_outputs": final,
-            "markdown": build_markdown(f"Notes: {title}", source_line, final, note),
+    doc_title = f"Notes: {title}"
+    return {"final_outputs": final, "doc_title": doc_title, "source_line": source_line,
+            "transcript_note": note,
+            "markdown": build_markdown(doc_title, source_line, final, note),
             "log": ["Document ready."]}

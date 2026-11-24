@@ -7,6 +7,7 @@ from typing import List, Union
 
 import config
 from agents.common import options
+from agents.registry import ANALYSIS_AGENTS
 
 Next = Union[str, List[str]]
 
@@ -30,8 +31,7 @@ def after_download(state) -> str:
 
 def select_analysis(state) -> List[str]:
     """Fan out to the analysis agents the user asked for."""
-    return [k for k in options(state)["outputs"]
-            if k in ("summary", "takeaways", "timeline")]
+    return [k for k in options(state)["outputs"] if k in ANALYSIS_AGENTS]
 
 
 def after_preprocess(state) -> Next:
